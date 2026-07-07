@@ -21,6 +21,18 @@ package.
 
 - `addons/addon-webgl/package.json` — package renamed to
   `@diffplug/xterm-addon-webgl-sdf`; version scheme below.
+- `addons/addon-webgl/src/SdfGlyphRasterizer.ts` — new file: vendored
+  adaptation of mapbox/tiny-sdf (BSD-2-Clause, attribution in header).
+- `addons/addon-webgl/src/{TextureAtlas,GlyphRenderer,WebglAddon,WebglRenderer,CharAtlasUtils,CharAtlasCache,Types}.ts`
+  — SDF glyph rendering behind the `sdf` / `sdfGlyphSize` addon options
+  (documented in the typings). Eligible glyphs are stored as distance fields
+  (alpha channel) at a fixed base size and tinted/reconstructed in the glyph
+  shader; decorated cells (underline/strike/overline), custom glyphs,
+  powerline glyphs and probable emoji keep the raster path. Instance layout
+  is 16 floats/cell (upstream 11) — merge carefully if upstream touches
+  GlyphRenderer vertex code.
+- `addons/addon-webgl/src/CharAtlasUtils.test.ts` — config fixture gains the
+  `sdf`/`sdfGlyphSize` fields.
 - `addons/addon-webgl/typings/addon-webgl.d.ts` — the `declare module` name is
   the published package name (TypeScript only attaches the types to imports if
   they match; an additive re-export block does not work because the file is a
