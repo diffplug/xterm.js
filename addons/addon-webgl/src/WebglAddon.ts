@@ -12,6 +12,7 @@ import { getSafariVersion, isSafari } from 'common/Platform';
 import { ICoreService, IDecorationService, ILogService, IOptionsService } from 'common/services/Services';
 import { IWebGL2RenderingContext } from './Types';
 import { WebglRenderer } from './WebglRenderer';
+import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
 import { Emitter, EventUtils } from 'common/Event';
 
 export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi {
@@ -48,7 +49,7 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
     super();
     this._customGlyphs = options?.customGlyphs ?? true;
     this._sdf = options?.sdf ?? false;
-    this._sdfGlyphSize = options?.sdfGlyphSize ?? 0;
+    this._sdfGlyphSize = options?.sdfGlyphSize ?? DEFAULT_SDF_GLYPH_SIZE;
     this._preserveDrawingBuffer = options?.preserveDrawingBuffer;
   }
 

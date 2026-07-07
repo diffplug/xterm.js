@@ -16,7 +16,7 @@ import { AttributeData } from 'common/buffer/AttributeData';
 import { Attributes, DEFAULT_COLOR, DEFAULT_EXT, UnderlineStyle } from 'common/buffer/Constants';
 import { ILogService, IUnicodeService } from 'common/services/Services';
 import { Emitter } from 'common/Event';
-import { SdfGlyphRasterizer, type ISdfGlyph } from './SdfGlyphRasterizer';
+import { SdfGlyphRasterizer } from './SdfGlyphRasterizer';
 
 /**
  * A shared object which is used to draw nothing for a particular cell.
@@ -85,11 +85,11 @@ export class TextureAtlas implements ITextureAtlas {
   // distance fields at a fixed base font size and tinted/reconstructed in the glyph shader.
   private _sdfRasterizer: SdfGlyphRasterizer | undefined;
   private _sdfScale: number = 1;
-  // A distance field depends only on the glyph shape (chars/weight/style) — color is applied in
-  // the shader — so shapes are shared across the color-keyed glyph cache to avoid re-running the
-  // expensive EDT per color. Atlas space is still allocated per color: page-merge bookkeeping
-  // mutates glyph records in place, so sharing texture rects would leave aliased records stale.
-  private _sdfShapeCache: Map<string, ISdfGlyph> = new Map();
+  // The atlas has no notion of color for SDF glyphs: a distance field depends only on the glyph
+  // shape (chars/weight/style) and color is applied per cell in the shader, so exactly one
+  // texture entry exists per shape. This map holds the canonical glyph record per shape; the
+  // color-keyed cache maps get lightweight per-color records that share the texture entry.
+  private _sdfGlyphCache: Map<string, IRasterizedGlyph> = new Map();
 
   public static maxAtlasPages: number | undefined;
   public static maxTextureSize: number | undefined;
@@ -117,11 +117,8 @@ export class TextureAtlas implements ITextureAtlas {
     }));
     if (this._config.sdf) {
       const deviceFontSize = this._config.fontSize * this._config.devicePixelRatio;
-      // Default to 2x supersampling: distance fields carry more corner detail than the render
-      // size needs at 1:1, so text survives magnification (the 3D use case) with less rounding
-      const sdfFontSize = this._config.sdfGlyphSize || deviceFontSize * 2;
-      this._sdfScale = deviceFontSize / sdfFontSize;
-      this._sdfRasterizer = new SdfGlyphRasterizer(_document, sdfFontSize, this._config.fontFamily);
+      this._sdfScale = deviceFontSize / this._config.sdfGlyphSize;
+      this._sdfRasterizer = new SdfGlyphRasterizer(_document, this._config.sdfGlyphSize, this._config.fontFamily);
     }
   }
 
@@ -170,7 +167,7 @@ export class TextureAtlas implements ITextureAtlas {
     }
     this._cacheMap.clear();
     this._cacheMapCombined.clear();
-    this._sdfShapeCache.clear();
+    this._sdfGlyphCache.clear();
     this._didWarmUp = false;
   }
 
@@ -994,20 +991,55 @@ export class TextureAtlas implements ITextureAtlas {
   }
 
   /**
-   * Fork addition: rasterize a glyph as a signed distance field at the SDF base font size and
-   * store it in the atlas with the distance in the alpha channel (RGB is white, which survives
-   * canvas premultiplication exactly — the shader only reads alpha for SDF glyphs and applies
-   * the tint recorded on the glyph).
+   * Fork addition: get the rasterized glyph for an SDF-eligible glyph. The atlas has no notion
+   * of color for these: a distance field depends only on the glyph shape (chars/weight/style)
+   * and color is applied per cell in the shader, so exactly one texture entry exists per shape.
+   * Each additional color gets a lightweight record sharing that entry with its own tint.
    */
   private _drawToCacheSdf(chars: string, fontWeight: string | number, fontStyle: string, foregroundColor: IColor): IRasterizedGlyph {
     const shapeKey = `${fontWeight}|${fontStyle}|${chars}`;
-    let sdf = this._sdfShapeCache.get(shapeKey);
-    if (!sdf) {
-      const maxInkWidth = Math.ceil(this._config.deviceCellWidth * Math.max(chars.length, 2) / this._sdfScale);
-      const sdfCharHeight = this._config.deviceCharHeight / this._sdfScale;
-      sdf = this._sdfRasterizer!.draw(chars, fontWeight, fontStyle, sdfCharHeight, maxInkWidth);
-      this._sdfShapeCache.set(shapeKey, sdf);
+    const canonical = this._sdfGlyphCache.get(shapeKey);
+    if (canonical === undefined) {
+      const rasterizedGlyph = this._rasterizeSdfShape(chars, fontWeight, fontStyle, foregroundColor);
+      this._sdfGlyphCache.set(shapeKey, rasterizedGlyph);
+      return rasterizedGlyph;
     }
+    if (canonical === NULL_RASTERIZED_GLYPH) {
+      return canonical;
+    }
+    // Same shape, different color: share the texture entry. The record gets its own vectors and
+    // registers on the page because page merge/delete bookkeeping mutates every registered glyph
+    // record in place exactly once — shared vectors would be transformed multiple times, and an
+    // unregistered record would go stale.
+    const [tintR, tintG, tintB, tintA] = rgba.toChannels(foregroundColor.rgba);
+    const colorVariant: IRasterizedGlyph = {
+      texturePage: canonical.texturePage,
+      texturePosition: { x: canonical.texturePosition.x, y: canonical.texturePosition.y },
+      texturePositionClipSpace: { x: canonical.texturePositionClipSpace.x, y: canonical.texturePositionClipSpace.y },
+      size: { x: canonical.size.x, y: canonical.size.y },
+      sizeClipSpace: { x: canonical.sizeClipSpace.x, y: canonical.sizeClipSpace.y },
+      offset: { x: canonical.offset.x, y: canonical.offset.y },
+      sdf: true,
+      renderScale: canonical.renderScale,
+      tintR: tintR / 255,
+      tintG: tintG / 255,
+      tintB: tintB / 255,
+      tintA: tintA / 255
+    };
+    this._pages[canonical.texturePage].addGlyphAlias(colorVariant);
+    return colorVariant;
+  }
+
+  /**
+   * Rasterize a glyph shape as a signed distance field at the SDF base font size and store it in
+   * the atlas with the distance in the alpha channel. Each texel holds one plain distance field —
+   * deliberately no multi-glyph channel packing, keeping the texel layout compatible with a
+   * future switch to multi-channel (MSDF) distance fields.
+   */
+  private _rasterizeSdfShape(chars: string, fontWeight: string | number, fontStyle: string, foregroundColor: IColor): IRasterizedGlyph {
+    const maxInkWidth = Math.ceil(this._config.deviceCellWidth * Math.max(chars.length, 2) / this._sdfScale);
+    const sdfCharHeight = this._config.deviceCharHeight / this._sdfScale;
+    const sdf = this._sdfRasterizer!.draw(chars, fontWeight, fontStyle, sdfCharHeight, maxInkWidth);
     if (sdf.width === 0 || sdf.height === 0) {
       return NULL_RASTERIZED_GLYPH;
     }
@@ -1154,6 +1186,15 @@ class AtlasPage {
   public addGlyph(glyph: IRasterizedGlyph): void {
     this._glyphs.push(glyph);
     this._usedPixels += glyph.size.x * glyph.size.y;
+  }
+
+  /**
+   * Fork addition: register a glyph record that shares another glyph's texture rect (an SDF
+   * color variant). It joins the merge/delete bookkeeping like any glyph but does not count
+   * toward used pixels — its texels are already counted by the canonical record.
+   */
+  public addGlyphAlias(glyph: IRasterizedGlyph): void {
+    this._glyphs.push(glyph);
   }
 
   /**

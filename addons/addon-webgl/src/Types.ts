@@ -42,7 +42,7 @@ export interface ICharAtlasConfig {
   sdf: boolean;
   /**
    * Base font size in pixels that SDF glyphs are rasterized at, independent of the terminal's
-   * font size. 0 means "native" (fontSize * devicePixelRatio).
+   * font size and devicePixelRatio.
    */
   sdfGlyphSize: number;
   devicePixelRatio: number;

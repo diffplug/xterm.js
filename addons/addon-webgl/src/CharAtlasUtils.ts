@@ -8,8 +8,9 @@ import { Attributes } from 'common/buffer/Constants';
 import { ITerminalOptions } from '@xterm/xterm';
 import { IColorSet, ReadonlyColorSet } from 'browser/Types';
 import { NULL_COLOR } from 'common/Color';
+import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
 
-export function generateConfig(deviceCellWidth: number, deviceCellHeight: number, deviceCharWidth: number, deviceCharHeight: number, options: Required<ITerminalOptions>, colors: ReadonlyColorSet, devicePixelRatio: number, deviceMaxTextureSize: number, customGlyphs: boolean = true, sdf: boolean = false, sdfGlyphSize: number = 0): ICharAtlasConfig {
+export function generateConfig(deviceCellWidth: number, deviceCellHeight: number, deviceCharWidth: number, deviceCharHeight: number, options: Required<ITerminalOptions>, colors: ReadonlyColorSet, devicePixelRatio: number, deviceMaxTextureSize: number, customGlyphs: boolean = true, sdf: boolean = false, sdfGlyphSize: number = DEFAULT_SDF_GLYPH_SIZE): ICharAtlasConfig {
   // null out some fields that don't matter
   const clonedColors: IColorSet = {
     foreground: colors.foreground,

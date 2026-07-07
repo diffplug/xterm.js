@@ -26,10 +26,14 @@ package.
 - `addons/addon-webgl/src/{TextureAtlas,GlyphRenderer,WebglAddon,WebglRenderer,CharAtlasUtils,CharAtlasCache,Types}.ts`
   — SDF glyph rendering behind the `sdf` / `sdfGlyphSize` addon options
   (documented in the typings). Eligible glyphs are stored as distance fields
-  (alpha channel) at a fixed base size and tinted/reconstructed in the glyph
-  shader; decorated cells (underline/strike/overline), custom glyphs,
-  powerline glyphs and probable emoji keep the raster path. Instance layout
-  is 16 floats/cell (upstream 11) — merge carefully if upstream touches
+  (alpha channel) at a fixed base size (default 32px, never derived from the
+  terminal font) and tinted/reconstructed in the glyph shader. The atlas has
+  no notion of color for SDF glyphs — one texture entry per shape, per-color
+  records share it — and each texel holds one plain distance field (no
+  channel packing) so the layout stays compatible with a future MSDF switch.
+  Decorated cells (underline/strike/overline), custom glyphs, powerline
+  glyphs and probable emoji keep the raster path. Instance layout is 16
+  floats/cell (upstream 11) — merge carefully if upstream touches
   GlyphRenderer vertex code.
 - `addons/addon-webgl/src/CharAtlasUtils.test.ts` — config fixture gains the
   `sdf`/`sdfGlyphSize` fields.

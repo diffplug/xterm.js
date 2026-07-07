@@ -8,6 +8,7 @@ import { ITerminalOptions, Terminal } from '@xterm/xterm';
 import { ITerminal, ReadonlyColorSet } from 'browser/Types';
 import { ICharAtlasConfig, ITextureAtlas } from './Types';
 import { generateConfig, configEquals } from './CharAtlasUtils';
+import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
 import type { ILogService } from 'common/services/Services';
 
 interface ITextureAtlasCacheEntry {
@@ -36,7 +37,7 @@ export function acquireTextureAtlas(
   deviceMaxTextureSize: number,
   customGlyphs: boolean = true,
   sdf: boolean = false,
-  sdfGlyphSize: number = 0
+  sdfGlyphSize: number = DEFAULT_SDF_GLYPH_SIZE
 ): ITextureAtlas {
   const newConfig = generateConfig(deviceCellWidth, deviceCellHeight, deviceCharWidth, deviceCharHeight, options, colors, devicePixelRatio, deviceMaxTextureSize, customGlyphs, sdf, sdfGlyphSize);
 

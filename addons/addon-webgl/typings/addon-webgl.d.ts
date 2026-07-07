@@ -93,9 +93,9 @@ declare module '@diffplug/xterm-addon-webgl-sdf' {
 
     /**
      * Fork addition: the base font size in pixels that SDF glyphs are rasterized at, independent
-     * of the terminal's font size. Lower values produce a smaller atlas that the SDF shader can
-     * still magnify with crisp edges. The default is 0, meaning 2x the terminal's font size in
-     * device pixels — supersampled so glyph corners survive magnification with less rounding.
+     * of the terminal's font size and devicePixelRatio. Lower values produce a smaller atlas that
+     * the SDF shader can still magnify with crisp edges; higher values preserve more corner
+     * detail. The default is 32.
      */
     sdfGlyphSize?: number
   }

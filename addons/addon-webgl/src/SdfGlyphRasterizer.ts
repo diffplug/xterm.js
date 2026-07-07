@@ -41,6 +41,12 @@ const INF = 1e20;
  */
 export const SDF_CUTOFF = 0.25;
 
+/**
+ * Default base font size in pixels for SDF rasterization when the addon option is not set. A
+ * fixed constant, deliberately not derived from the terminal's font size or devicePixelRatio.
+ */
+export const DEFAULT_SDF_GLYPH_SIZE = 32;
+
 // Lookup table for gamma-corrected, signed squared alpha distance values
 const alphaTable = new Float64Array(256);
 for (let i = 0; i < 256; i++) {

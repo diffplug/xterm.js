@@ -6,6 +6,7 @@
 import { ITerminal } from 'browser/Types';
 import { CellColorResolver } from './CellColorResolver';
 import { acquireTextureAtlas, removeTerminalFromCache } from './CharAtlasCache';
+import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
 import { CursorBlinkStateManager } from './CursorBlinkStateManager';
 import { observeDevicePixelDimensions } from './DevicePixelObserver';
 import { IRenderDimensions, IRenderer, IRequestRedrawEvent } from 'browser/renderer/shared/Types';
@@ -82,7 +83,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
     private readonly _themeService: IThemeService,
     private readonly _customGlyphs: boolean = true,
     private readonly _sdf: boolean = false,
-    private readonly _sdfGlyphSize: number = 0,
+    private readonly _sdfGlyphSize: number = DEFAULT_SDF_GLYPH_SIZE,
     preserveDrawingBuffer?: boolean
   ) {
     super();
