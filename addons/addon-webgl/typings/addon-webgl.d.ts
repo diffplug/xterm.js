@@ -82,6 +82,22 @@ declare module '@diffplug/xterm-addon-webgl-sdf' {
      * context. This may be useful in tests. This default is false.
      */
     preserveDrawingBuffer?: boolean
+
+    /**
+     * Fork addition: render eligible glyphs via signed distance fields so text stays crisp when
+     * the terminal is rendered at scales other than 1:1 (e.g. as a texture in a 3D scene). Color
+     * emoji, custom glyphs (box drawing/powerline) and decorated cells (underline etc.) keep the
+     * pixel-accurate raster path. The default is false.
+     */
+    sdf?: boolean
+
+    /**
+     * Fork addition: the base font size in pixels that SDF glyphs are rasterized at, independent
+     * of the terminal's font size. Lower values produce a smaller atlas that the SDF shader can
+     * still magnify with crisp edges. The default is 0, meaning "native" (the terminal's font
+     * size in device pixels).
+     */
+    sdfGlyphSize?: number
   }
 }
 

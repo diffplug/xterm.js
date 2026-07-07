@@ -38,6 +38,13 @@ export interface IWebGLVertexArrayObject {
 
 export interface ICharAtlasConfig {
   customGlyphs: boolean;
+  /** Whether to store eligible glyphs as signed distance fields and tint them in the shader. */
+  sdf: boolean;
+  /**
+   * Base font size in pixels that SDF glyphs are rasterized at, independent of the terminal's
+   * font size. 0 means "native" (fontSize * devicePixelRatio).
+   */
+  sdfGlyphSize: number;
   devicePixelRatio: number;
   deviceMaxTextureSize: number;
   letterSpacing: number;
@@ -112,6 +119,22 @@ export interface IRasterizedGlyph {
    * The width and height of the glyph in the texture in clip space coordinates.
    */
   sizeClipSpace: IVector;
+  /**
+   * Whether the texture data is a signed distance field (alpha channel = distance, tint applied
+   * in the shader) rather than a direct color raster.
+   */
+  sdf: boolean;
+  /**
+   * Factor to scale the texture rect by when rendering (render px = size * renderScale). Always 1
+   * for raster glyphs; for SDF glyphs this maps the SDF base size to the terminal's device font
+   * size.
+   */
+  renderScale: number;
+  /** Straight-alpha tint applied in the shader for SDF glyphs, as normalized [0-1] channels. */
+  tintR: number;
+  tintG: number;
+  tintB: number;
+  tintA: number;
 }
 
 export interface IVector {

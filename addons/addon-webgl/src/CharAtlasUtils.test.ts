@@ -38,6 +38,8 @@ function createTestConfig(overrides: Partial<ICharAtlasConfig> = {}): ICharAtlas
   };
   return {
     customGlyphs: true,
+    sdf: false,
+    sdfGlyphSize: 0,
     devicePixelRatio: 1,
     deviceMaxTextureSize: 4096,
     letterSpacing: 0,

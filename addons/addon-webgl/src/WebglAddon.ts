@@ -28,6 +28,8 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
   public readonly onContextLoss = this._onContextLoss.event;
 
   private readonly _customGlyphs: boolean;
+  private readonly _sdf: boolean;
+  private readonly _sdfGlyphSize: number;
   private readonly _preserveDrawingBuffer?: boolean;
 
   constructor(options?: IWebglAddonOptions) {
@@ -45,6 +47,8 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
     }
     super();
     this._customGlyphs = options?.customGlyphs ?? true;
+    this._sdf = options?.sdf ?? false;
+    this._sdfGlyphSize = options?.sdfGlyphSize ?? 0;
     this._preserveDrawingBuffer = options?.preserveDrawingBuffer;
   }
 
@@ -79,6 +83,8 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
       optionsService,
       themeService,
       this._customGlyphs,
+      this._sdf,
+      this._sdfGlyphSize,
       this._preserveDrawingBuffer
     ));
     this._register(EventUtils.forward(this._renderer.onContextLoss, this._onContextLoss));

@@ -16,6 +16,7 @@ import { AttributeData } from 'common/buffer/AttributeData';
 import { Attributes, DEFAULT_COLOR, DEFAULT_EXT, UnderlineStyle } from 'common/buffer/Constants';
 import { ILogService, IUnicodeService } from 'common/services/Services';
 import { Emitter } from 'common/Event';
+import { SdfGlyphRasterizer } from './SdfGlyphRasterizer';
 
 /**
  * A shared object which is used to draw nothing for a particular cell.
@@ -26,7 +27,10 @@ const NULL_RASTERIZED_GLYPH: IRasterizedGlyph = {
   texturePositionClipSpace: { x: 0, y: 0 },
   offset: { x: 0, y: 0 },
   size: { x: 0, y: 0 },
-  sizeClipSpace: { x: 0, y: 0 }
+  sizeClipSpace: { x: 0, y: 0 },
+  sdf: false,
+  renderScale: 1,
+  tintR: 0, tintG: 0, tintB: 0, tintA: 0
 };
 
 const TMP_CANVAS_GLYPH_PADDING = 2;
@@ -77,6 +81,12 @@ export class TextureAtlas implements ITextureAtlas {
 
   private _textureSize: number = 512;
 
+  // SDF glyph rendering (fork addition): when enabled, eligible glyphs are stored as signed
+  // distance fields at a fixed base font size and tinted/reconstructed in the glyph shader.
+  private _sdfRasterizer: SdfGlyphRasterizer | undefined;
+  private _sdfFontSize: number = 0;
+  private _sdfScale: number = 1;
+
   public static maxAtlasPages: number | undefined;
   public static maxTextureSize: number | undefined;
 
@@ -101,6 +111,12 @@ export class TextureAtlas implements ITextureAtlas {
       alpha: this._config.allowTransparency,
       willReadFrequently: true
     }));
+    if (this._config.sdf) {
+      const deviceFontSize = this._config.fontSize * this._config.devicePixelRatio;
+      this._sdfFontSize = this._config.sdfGlyphSize || deviceFontSize;
+      this._sdfScale = deviceFontSize / this._sdfFontSize;
+      this._sdfRasterizer = new SdfGlyphRasterizer(_document, this._sdfFontSize, this._config.fontFamily);
+    }
   }
 
   public dispose(): void {
@@ -545,6 +561,20 @@ export class TextureAtlas implements ITextureAtlas {
       chWidth = this._unicodeService.getStringCellWidth(codeOrChars);
     }
 
+    // Fork addition: rasterize eligible glyphs as signed distance fields so the shader can
+    // reconstruct crisp edges at any render scale. Decorated cells (underline/strikethrough/
+    // overline), custom glyphs, powerline glyphs, glyphs treated as background colors and
+    // probable color emoji keep the pixel-accurate raster path.
+    if (
+      this._sdfRasterizer && !customGlyph && !powerlineGlyph &&
+      !underline && !strikethrough && !overline &&
+      !treatGlyphAsBackgroundColor(chars.charCodeAt(0)) &&
+      !isProbablyEmoji(chars)
+    ) {
+      this._tmpCtx.restore();
+      return this._drawToCacheSdf(chars, fontWeight, fontStyle, foregroundColor);
+    }
+
     // Draw underline
     if (underline) {
       this._tmpCtx.save();
@@ -774,6 +804,30 @@ export class TextureAtlas implements ITextureAtlas {
 
     const rasterizedGlyph = this._findGlyphBoundingBox(imageData, this._workBoundingBox, allowedWidth, restrictedPowerlineGlyph, customGlyph, padding);
 
+    const activePage = this._allocateGlyphSpace(rasterizedGlyph);
+
+    // putImageData doesn't do any blending, so it will overwrite any existing cache entry for us
+    activePage.ctx.putImageData(
+      imageData,
+      rasterizedGlyph.texturePosition.x - this._workBoundingBox.left,
+      rasterizedGlyph.texturePosition.y - this._workBoundingBox.top,
+      this._workBoundingBox.left,
+      this._workBoundingBox.top,
+      rasterizedGlyph.size.x,
+      rasterizedGlyph.size.y
+    );
+    activePage.addGlyph(rasterizedGlyph);
+    activePage.version = ++AtlasPage.nextVersion;
+
+    return rasterizedGlyph;
+  }
+
+  /**
+   * Finds space for the glyph in an atlas page, records its texture position/clip-space fields
+   * and advances the row bookkeeping. The caller is responsible for writing the pixels at
+   * `texturePosition` on the returned page and calling `addGlyph`.
+   */
+  private _allocateGlyphSpace(rasterizedGlyph: IRasterizedGlyph): AtlasPage {
     // Find the best atlas row to use
     let activePage: AtlasPage;
     let activeRow: ICharAtlasActiveRow;
@@ -929,16 +983,54 @@ export class TextureAtlas implements ITextureAtlas {
     activeRow.height = Math.max(activeRow.height, rasterizedGlyph.size.y);
     activeRow.x += rasterizedGlyph.size.x;
 
-    // putImageData doesn't do any blending, so it will overwrite any existing cache entry for us
-    activePage.ctx.putImageData(
-      imageData,
-      rasterizedGlyph.texturePosition.x - this._workBoundingBox.left,
-      rasterizedGlyph.texturePosition.y - this._workBoundingBox.top,
-      this._workBoundingBox.left,
-      this._workBoundingBox.top,
-      rasterizedGlyph.size.x,
-      rasterizedGlyph.size.y
-    );
+    return activePage;
+  }
+
+  /**
+   * Fork addition: rasterize a glyph as a signed distance field at the SDF base font size and
+   * store it in the atlas with the distance in the alpha channel (RGB is white, which survives
+   * canvas premultiplication exactly — the shader only reads alpha for SDF glyphs and applies
+   * the tint recorded on the glyph).
+   */
+  private _drawToCacheSdf(chars: string, fontWeight: string | number, fontStyle: string, foregroundColor: IColor): IRasterizedGlyph {
+    const maxInkWidth = Math.ceil(this._config.deviceCellWidth * Math.max(chars.length, 2) / this._sdfScale);
+    const sdfCharHeight = this._config.deviceCharHeight / this._sdfScale;
+    const sdf = this._sdfRasterizer!.draw(chars, fontWeight, fontStyle, sdfCharHeight, maxInkWidth);
+    if (sdf.width === 0 || sdf.height === 0) {
+      return NULL_RASTERIZED_GLYPH;
+    }
+
+    const rgba = foregroundColor.rgba;
+    const rasterizedGlyph: IRasterizedGlyph = {
+      texturePage: 0,
+      texturePosition: { x: 0, y: 0 },
+      texturePositionClipSpace: { x: 0, y: 0 },
+      size: { x: sdf.width, y: sdf.height },
+      sizeClipSpace: { x: sdf.width, y: sdf.height },
+      offset: {
+        x: Math.round(-sdf.left * this._sdfScale),
+        y: Math.round(-sdf.top * this._sdfScale)
+      },
+      sdf: true,
+      renderScale: this._sdfScale,
+      tintR: (rgba >>> 24 & 0xFF) / 255,
+      tintG: (rgba >>> 16 & 0xFF) / 255,
+      tintB: (rgba >>> 8 & 0xFF) / 255,
+      tintA: (rgba & 0xFF) / 255
+    };
+
+    const activePage = this._allocateGlyphSpace(rasterizedGlyph);
+
+    const img = new ImageData(sdf.width, sdf.height);
+    const data = img.data;
+    for (let i = 0; i < sdf.data.length; i++) {
+      const j = i * 4;
+      data[j] = 255;
+      data[j + 1] = 255;
+      data[j + 2] = 255;
+      data[j + 3] = sdf.data[i];
+    }
+    activePage.ctx.putImageData(img, rasterizedGlyph.texturePosition.x, rasterizedGlyph.texturePosition.y);
     activePage.addGlyph(rasterizedGlyph);
     activePage.version = ++AtlasPage.nextVersion;
 
@@ -1019,6 +1111,9 @@ export class TextureAtlas implements ITextureAtlas {
       texturePage: 0,
       texturePosition: { x: 0, y: 0 },
       texturePositionClipSpace: { x: 0, y: 0 },
+      sdf: false,
+      renderScale: 1,
+      tintR: 0, tintG: 0, tintB: 0, tintA: 0,
       size: {
         x: boundingBox.right - boundingBox.left + 1,
         y: boundingBox.bottom - boundingBox.top + 1
@@ -1179,4 +1274,29 @@ function createCanvas(document: Document, width: number, height: number): HTMLCa
   canvas.width = width;
   canvas.height = height;
   return canvas;
+}
+
+/**
+ * Fork addition: heuristic for glyphs that are likely to render as multi-color emoji, which
+ * cannot be represented by a single-channel distance field. Errs on the side of the raster path
+ * (a text-presentation symbol going raster only costs crispness; an emoji going SDF would lose
+ * its colors entirely).
+ */
+function isProbablyEmoji(chars: string): boolean {
+  for (let i = 0; i < chars.length; i++) {
+    const cp = chars.codePointAt(i)!;
+    if (cp > 0xFFFF) {
+      i++;
+    }
+    if (
+      cp === 0x200D ||                      // zero-width joiner (emoji sequences)
+      cp === 0xFE0F ||                      // variation selector-16 (emoji presentation)
+      (cp >= 0x1F000 && cp <= 0x1FAFF) ||   // emoji & pictograph blocks
+      (cp >= 0x2600 && cp <= 0x27BF) ||     // misc symbols + dingbats
+      (cp >= 0x2B00 && cp <= 0x2BFF)        // misc symbols and arrows
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

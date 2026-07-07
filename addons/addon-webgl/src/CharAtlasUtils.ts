@@ -9,7 +9,7 @@ import { ITerminalOptions } from '@xterm/xterm';
 import { IColorSet, ReadonlyColorSet } from 'browser/Types';
 import { NULL_COLOR } from 'common/Color';
 
-export function generateConfig(deviceCellWidth: number, deviceCellHeight: number, deviceCharWidth: number, deviceCharHeight: number, options: Required<ITerminalOptions>, colors: ReadonlyColorSet, devicePixelRatio: number, deviceMaxTextureSize: number, customGlyphs: boolean = true): ICharAtlasConfig {
+export function generateConfig(deviceCellWidth: number, deviceCellHeight: number, deviceCharWidth: number, deviceCharHeight: number, options: Required<ITerminalOptions>, colors: ReadonlyColorSet, devicePixelRatio: number, deviceMaxTextureSize: number, customGlyphs: boolean = true, sdf: boolean = false, sdfGlyphSize: number = 0): ICharAtlasConfig {
   // null out some fields that don't matter
   const clonedColors: IColorSet = {
     foreground: colors.foreground,
@@ -33,6 +33,8 @@ export function generateConfig(deviceCellWidth: number, deviceCellHeight: number
   };
   return {
     customGlyphs,
+    sdf,
+    sdfGlyphSize,
     devicePixelRatio,
     deviceMaxTextureSize,
     letterSpacing: options.letterSpacing,
@@ -61,6 +63,8 @@ export function configEquals(a: ICharAtlasConfig, b: ICharAtlasConfig): boolean 
   return a.devicePixelRatio === b.devicePixelRatio &&
       a.deviceMaxTextureSize === b.deviceMaxTextureSize &&
       a.customGlyphs === b.customGlyphs &&
+      a.sdf === b.sdf &&
+      a.sdfGlyphSize === b.sdfGlyphSize &&
       a.lineHeight === b.lineHeight &&
       a.letterSpacing === b.letterSpacing &&
       a.fontFamily === b.fontFamily &&

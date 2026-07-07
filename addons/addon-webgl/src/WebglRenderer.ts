@@ -81,6 +81,8 @@ export class WebglRenderer extends Disposable implements IRenderer {
     private readonly _optionsService: IOptionsService,
     private readonly _themeService: IThemeService,
     private readonly _customGlyphs: boolean = true,
+    private readonly _sdf: boolean = false,
+    private readonly _sdfGlyphSize: number = 0,
     preserveDrawingBuffer?: boolean
   ) {
     super();
@@ -306,7 +308,9 @@ export class WebglRenderer extends Disposable implements IRenderer {
       this.dimensions.device.char.height,
       this._coreBrowserService.dpr,
       this._deviceMaxTextureSize,
-      this._customGlyphs
+      this._customGlyphs,
+      this._sdf,
+      this._sdfGlyphSize
     );
     if (this._charAtlas !== atlas) {
       this._onChangeTextureAtlas.fire(atlas.pages[0].canvas);
