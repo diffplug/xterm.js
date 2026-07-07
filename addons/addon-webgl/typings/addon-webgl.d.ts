@@ -81,3 +81,10 @@ declare module '@xterm/addon-webgl' {
     preserveDrawingBuffer?: boolean
   }
 }
+
+// Fork addition (diffplug/xterm.js sdf branch): the package is published as
+// @diffplug/xterm-addon-webgl-sdf, so mirror the module declaration above
+// under that name. Keep this block additive so upstream merges stay clean.
+declare module '@diffplug/xterm-addon-webgl-sdf' {
+  export * from '@xterm/addon-webgl';
+}
