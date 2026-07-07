@@ -21,8 +21,11 @@ package.
 
 - `addons/addon-webgl/package.json` — package renamed to
   `@diffplug/xterm-addon-webgl-sdf`; version scheme below.
-- `addons/addon-webgl/typings/addon-webgl.d.ts` — appended a
-  `declare module '@diffplug/xterm-addon-webgl-sdf'` re-export block.
+- `addons/addon-webgl/typings/addon-webgl.d.ts` — the `declare module` name is
+  the published package name (TypeScript only attaches the types to imports if
+  they match; an additive re-export block does not work because the file is a
+  module, so `export * from '@xterm/addon-webgl'` resolves against
+  node_modules and finds nothing).
 - `FORK.md` (this file).
 
 ## Versioning
