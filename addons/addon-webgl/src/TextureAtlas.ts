@@ -6,7 +6,7 @@
 import { IColorContrastCache } from 'browser/Types';
 import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
 import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-import { computeNextVariantOffset, treatGlyphAsBackgroundColor, isPowerlineGlyph, isRestrictedPowerlineGlyph, throwIfFalsy } from 'browser/renderer/shared/RendererUtils';
+import { computeNextVariantOffset, treatGlyphAsBackgroundColor, isEmoji, isPowerlineGlyph, isRestrictedPowerlineGlyph, throwIfFalsy } from 'browser/renderer/shared/RendererUtils';
 import { IBoundingBox, ICharAtlasConfig, IRasterizedGlyph, ITextureAtlas } from './Types';
 import { NULL_COLOR, channels, color, rgba } from 'common/Color';
 import { FourKeyMap } from 'common/MultiKeyMap';
@@ -16,7 +16,7 @@ import { AttributeData } from 'common/buffer/AttributeData';
 import { Attributes, DEFAULT_COLOR, DEFAULT_EXT, UnderlineStyle } from 'common/buffer/Constants';
 import { ILogService, IUnicodeService } from 'common/services/Services';
 import { Emitter } from 'common/Event';
-import { SdfGlyphRasterizer } from './SdfGlyphRasterizer';
+import { SdfGlyphRasterizer, type ISdfGlyph } from './SdfGlyphRasterizer';
 
 /**
  * A shared object which is used to draw nothing for a particular cell.
@@ -84,8 +84,12 @@ export class TextureAtlas implements ITextureAtlas {
   // SDF glyph rendering (fork addition): when enabled, eligible glyphs are stored as signed
   // distance fields at a fixed base font size and tinted/reconstructed in the glyph shader.
   private _sdfRasterizer: SdfGlyphRasterizer | undefined;
-  private _sdfFontSize: number = 0;
   private _sdfScale: number = 1;
+  // A distance field depends only on the glyph shape (chars/weight/style) — color is applied in
+  // the shader — so shapes are shared across the color-keyed glyph cache to avoid re-running the
+  // expensive EDT per color. Atlas space is still allocated per color: page-merge bookkeeping
+  // mutates glyph records in place, so sharing texture rects would leave aliased records stale.
+  private _sdfShapeCache: Map<string, ISdfGlyph> = new Map();
 
   public static maxAtlasPages: number | undefined;
   public static maxTextureSize: number | undefined;
@@ -115,9 +119,9 @@ export class TextureAtlas implements ITextureAtlas {
       const deviceFontSize = this._config.fontSize * this._config.devicePixelRatio;
       // Default to 2x supersampling: distance fields carry more corner detail than the render
       // size needs at 1:1, so text survives magnification (the 3D use case) with less rounding
-      this._sdfFontSize = this._config.sdfGlyphSize || deviceFontSize * 2;
-      this._sdfScale = deviceFontSize / this._sdfFontSize;
-      this._sdfRasterizer = new SdfGlyphRasterizer(_document, this._sdfFontSize, this._config.fontFamily);
+      const sdfFontSize = this._config.sdfGlyphSize || deviceFontSize * 2;
+      this._sdfScale = deviceFontSize / sdfFontSize;
+      this._sdfRasterizer = new SdfGlyphRasterizer(_document, sdfFontSize, this._config.fontFamily);
     }
   }
 
@@ -166,6 +170,7 @@ export class TextureAtlas implements ITextureAtlas {
     }
     this._cacheMap.clear();
     this._cacheMapCombined.clear();
+    this._sdfShapeCache.clear();
     this._didWarmUp = false;
   }
 
@@ -995,14 +1000,19 @@ export class TextureAtlas implements ITextureAtlas {
    * the tint recorded on the glyph).
    */
   private _drawToCacheSdf(chars: string, fontWeight: string | number, fontStyle: string, foregroundColor: IColor): IRasterizedGlyph {
-    const maxInkWidth = Math.ceil(this._config.deviceCellWidth * Math.max(chars.length, 2) / this._sdfScale);
-    const sdfCharHeight = this._config.deviceCharHeight / this._sdfScale;
-    const sdf = this._sdfRasterizer!.draw(chars, fontWeight, fontStyle, sdfCharHeight, maxInkWidth);
+    const shapeKey = `${fontWeight}|${fontStyle}|${chars}`;
+    let sdf = this._sdfShapeCache.get(shapeKey);
+    if (!sdf) {
+      const maxInkWidth = Math.ceil(this._config.deviceCellWidth * Math.max(chars.length, 2) / this._sdfScale);
+      const sdfCharHeight = this._config.deviceCharHeight / this._sdfScale;
+      sdf = this._sdfRasterizer!.draw(chars, fontWeight, fontStyle, sdfCharHeight, maxInkWidth);
+      this._sdfShapeCache.set(shapeKey, sdf);
+    }
     if (sdf.width === 0 || sdf.height === 0) {
       return NULL_RASTERIZED_GLYPH;
     }
 
-    const rgba = foregroundColor.rgba;
+    const [tintR, tintG, tintB, tintA] = rgba.toChannels(foregroundColor.rgba);
     const rasterizedGlyph: IRasterizedGlyph = {
       texturePage: 0,
       texturePosition: { x: 0, y: 0 },
@@ -1015,10 +1025,10 @@ export class TextureAtlas implements ITextureAtlas {
       },
       sdf: true,
       renderScale: this._sdfScale,
-      tintR: (rgba >>> 24 & 0xFF) / 255,
-      tintG: (rgba >>> 16 & 0xFF) / 255,
-      tintB: (rgba >>> 8 & 0xFF) / 255,
-      tintA: (rgba & 0xFF) / 255
+      tintR: tintR / 255,
+      tintG: tintG / 255,
+      tintB: tintB / 255,
+      tintA: tintA / 255
     };
 
     const activePage = this._allocateGlyphSpace(rasterizedGlyph);
@@ -1280,8 +1290,10 @@ function createCanvas(document: Document, width: number, height: number): HTMLCa
 
 /**
  * Fork addition: heuristic for glyphs that are likely to render as multi-color emoji, which
- * cannot be represented by a single-channel distance field. Errs on the side of the raster path
- * (a text-presentation symbol going raster only costs crispness; an emoji going SDF would lose
+ * cannot be represented by a single-channel distance field. Delegates to the shared isEmoji
+ * range table and widens it with cases that matter here: ZWJ sequences, the full emoji &
+ * pictograph planes, and misc symbols/arrows. Errs on the side of the raster path (a
+ * text-presentation symbol going raster only costs crispness; an emoji going SDF would lose
  * its colors entirely).
  */
 function isProbablyEmoji(chars: string): boolean {
@@ -1291,10 +1303,9 @@ function isProbablyEmoji(chars: string): boolean {
       i++;
     }
     if (
+      isEmoji(cp) ||
       cp === 0x200D ||                      // zero-width joiner (emoji sequences)
-      cp === 0xFE0F ||                      // variation selector-16 (emoji presentation)
-      (cp >= 0x1F000 && cp <= 0x1FAFF) ||   // emoji & pictograph blocks
-      (cp >= 0x2600 && cp <= 0x27BF) ||     // misc symbols + dingbats
+      (cp >= 0x1F000 && cp <= 0x1FAFF) ||   // emoji & pictograph blocks beyond isEmoji's set
       (cp >= 0x2B00 && cp <= 0x2BFF)        // misc symbols and arrows
     ) {
       return true;

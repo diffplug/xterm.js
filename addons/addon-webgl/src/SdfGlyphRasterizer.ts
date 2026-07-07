@@ -121,13 +121,20 @@ export class SdfGlyphRasterizer {
    * @param maxInkWidth Upper bound on ink width in SDF-space pixels, guarding against giant
    * ligatures blowing up the scratch canvas.
    */
+  /**
+   * (Re)apply the drawing state. Canvas dimension changes reset all context state, so this must
+   * run again after _ensureCanvasSize grows the canvas.
+   */
+  private _configureContext(fontWeight: string | number, fontStyle: string): void {
+    this._ctx.font = `${fontStyle} ${fontWeight} ${this._fontSize}px ${this._fontFamily}`;
+    this._ctx.textBaseline = TEXT_BASELINE;
+    this._ctx.textAlign = 'left';
+    this._ctx.fillStyle = 'black';
+  }
+
   public draw(chars: string, fontWeight: string | number, fontStyle: string, charHeight: number, maxInkWidth: number): ISdfGlyph {
     const ctx = this._ctx;
-    // Canvas dimension changes reset context state, so configure on every draw
-    ctx.font = `${fontStyle} ${fontWeight} ${this._fontSize}px ${this._fontFamily}`;
-    ctx.textBaseline = TEXT_BASELINE;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'black';
+    this._configureContext(fontWeight, fontStyle);
 
     const m = ctx.measureText(chars);
     const glyphTop = Math.ceil(m.actualBoundingBoxAscent);
@@ -144,10 +151,7 @@ export class SdfGlyphRasterizer {
     const width = glyphWidth + 2 * buffer;
     const height = glyphHeight + 2 * buffer;
     this._ensureCanvasSize(width, height);
-    ctx.font = `${fontStyle} ${fontWeight} ${this._fontSize}px ${this._fontFamily}`;
-    ctx.textBaseline = TEXT_BASELINE;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'black';
+    this._configureContext(fontWeight, fontStyle);
 
     ctx.clearRect(0, 0, width, height);
     ctx.fillText(chars, buffer - glyphLeft, buffer + glyphTop);

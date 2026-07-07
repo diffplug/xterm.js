@@ -9,6 +9,7 @@ import { Disposable, toDisposable } from 'common/Lifecycle';
 import { Terminal } from '@xterm/xterm';
 import { IRenderModel, IWebGL2RenderingContext, IWebGLVertexArrayObject, type IRasterizedGlyph, type ITextureAtlas } from './Types';
 import { createProgram, GLTexture, PROJECTION_MATRIX } from './WebglUtils';
+import { SDF_CUTOFF } from './SdfGlyphRasterizer';
 import type { ILogService, IOptionsService } from 'common/services/Services';
 import { allowRescaling, throwIfFalsy } from 'browser/renderer/shared/RendererUtils';
 
@@ -65,10 +66,10 @@ void main() {
 }`;
 
 /**
- * The edge threshold for SDF glyphs must match how SdfGlyphRasterizer encodes distances:
+ * The edge threshold for SDF glyphs, matching how SdfGlyphRasterizer encodes distances:
  * alpha = 1 - SDF_CUTOFF at the glyph edge.
  */
-const SDF_EDGE = '0.75';
+const SDF_EDGE = (1 - SDF_CUTOFF).toFixed(4);
 
 function createFragmentShaderSource(maxFragmentShaderTextureUnits: number): string {
   let textureConditionals = '';
