@@ -113,7 +113,9 @@ export class TextureAtlas implements ITextureAtlas {
     }));
     if (this._config.sdf) {
       const deviceFontSize = this._config.fontSize * this._config.devicePixelRatio;
-      this._sdfFontSize = this._config.sdfGlyphSize || deviceFontSize;
+      // Default to 2x supersampling: distance fields carry more corner detail than the render
+      // size needs at 1:1, so text survives magnification (the 3D use case) with less rounding
+      this._sdfFontSize = this._config.sdfGlyphSize || deviceFontSize * 2;
       this._sdfScale = deviceFontSize / this._sdfFontSize;
       this._sdfRasterizer = new SdfGlyphRasterizer(_document, this._sdfFontSize, this._config.fontFamily);
     }
