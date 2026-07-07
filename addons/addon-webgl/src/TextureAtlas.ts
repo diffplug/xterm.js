@@ -990,6 +990,12 @@ export class TextureAtlas implements ITextureAtlas {
     return activePage;
   }
 
+  /** The tint channels recorded on SDF glyph records, normalized to [0-1]. */
+  private _tintChannels(color: IColor): { tintR: number, tintG: number, tintB: number, tintA: number } {
+    const [r, g, b, a] = rgba.toChannels(color.rgba);
+    return { tintR: r / 255, tintG: g / 255, tintB: b / 255, tintA: a / 255 };
+  }
+
   /**
    * Fork addition: get the rasterized glyph for an SDF-eligible glyph. The atlas has no notion
    * of color for these: a distance field depends only on the glyph shape (chars/weight/style)
@@ -1010,8 +1016,9 @@ export class TextureAtlas implements ITextureAtlas {
     // Same shape, different color: share the texture entry. The record gets its own vectors and
     // registers on the page because page merge/delete bookkeeping mutates every registered glyph
     // record in place exactly once — shared vectors would be transformed multiple times, and an
-    // unregistered record would go stale.
-    const [tintR, tintG, tintB, tintA] = rgba.toChannels(foregroundColor.rgba);
+    // unregistered record would go stale. Fields are listed explicitly rather than spread from
+    // canonical so a future IRasterizedGlyph field is a compile error here, forcing a conscious
+    // copy-vs-share decision.
     const colorVariant: IRasterizedGlyph = {
       texturePage: canonical.texturePage,
       texturePosition: { x: canonical.texturePosition.x, y: canonical.texturePosition.y },
@@ -1021,10 +1028,7 @@ export class TextureAtlas implements ITextureAtlas {
       offset: { x: canonical.offset.x, y: canonical.offset.y },
       sdf: true,
       renderScale: canonical.renderScale,
-      tintR: tintR / 255,
-      tintG: tintG / 255,
-      tintB: tintB / 255,
-      tintA: tintA / 255
+      ...this._tintChannels(foregroundColor)
     };
     this._pages[canonical.texturePage].addGlyphAlias(colorVariant);
     return colorVariant;
@@ -1044,7 +1048,6 @@ export class TextureAtlas implements ITextureAtlas {
       return NULL_RASTERIZED_GLYPH;
     }
 
-    const [tintR, tintG, tintB, tintA] = rgba.toChannels(foregroundColor.rgba);
     const rasterizedGlyph: IRasterizedGlyph = {
       texturePage: 0,
       texturePosition: { x: 0, y: 0 },
@@ -1057,10 +1060,7 @@ export class TextureAtlas implements ITextureAtlas {
       },
       sdf: true,
       renderScale: this._sdfScale,
-      tintR: tintR / 255,
-      tintG: tintG / 255,
-      tintB: tintB / 255,
-      tintA: tintA / 255
+      ...this._tintChannels(foregroundColor)
     };
 
     const activePage = this._allocateGlyphSpace(rasterizedGlyph);
