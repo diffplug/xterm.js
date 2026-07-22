@@ -288,6 +288,11 @@ export class TextureAtlas implements ITextureAtlas {
     this._overflowSizePage = undefined;
     this._cacheMap.clear();
     this._cacheMapCombined.clear();
+    // Fork addition: _sdfGlyphCache is a third store of IRasterizedGlyph records, so it holds
+    // texturePage indices into the array just emptied. Every cache of rasterized glyphs must be
+    // dropped whenever pages are destroyed (see also clearTexture) — leaving this one behind
+    // makes the next SDF glyph index a page that no longer exists.
+    this._sdfGlyphCache.clear();
     this._didWarmUp = false;
     this._pageLayoutVersion++;
     this._logService.debug(`Evicted ${pageCount} WebGL atlas pages in ${(performance.now() - startTime).toFixed(2)}ms`);

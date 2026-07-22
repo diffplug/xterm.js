@@ -6,7 +6,7 @@
 import { IImage32, decodePng } from '@lunapaint/png-codec';
 import test, { expect } from '@playwright/test';
 import type { Terminal, ITerminalInitOnlyOptions, ITerminalOptions } from '@xterm/xterm';
-import type { IWebglAddonOptions, WebglAddon } from '@xterm/addon-webgl';
+import type { IWebglAddonOptions, WebglAddon } from '@diffplug/xterm-addon-webgl-sdf';
 import { ITestContext, createTestContext, openTerminal } from '../../../test/playwright/TestUtils';
 
 type CellSignature = number[];
