@@ -91,6 +91,17 @@ in `docs/specs/webgl-text.md`.
 `@xterm/xterm@6.1.0-beta.288`, our iteration 0. The addon bundles core
 internals, so consumers must pin the exact matching `@xterm/xterm` version.
 
+**Move `peerDependencies` with the version, in the same edit.** Upstream never
+commits that field — `bin/publish.js` injects
+`'@xterm/xterm': '^<coreVersion>'` at publish time, and we do not run
+`bin/publish.js` (we `npm pack` by hand), so unless it is checked in our tarball
+ships with no peer range at all. It is also the only place the base is recorded
+as a *full* version: the `-sdfNNN` tag carries the bare beta counter, which
+upstream restarts on every release line (`5.6.0-beta.1..143`, then
+`6.1.0-beta.1..302`), so the tag alone cannot say which line it came from.
+Dormouse's `scripts/xterm-lint.mjs` checks canopy's `@xterm/xterm` pin against
+this peer range, and pnpm warns on a mismatch by itself.
+
 Find the commit for an upstream beta with:
 `npm view @xterm/xterm@6.1.0-beta.NNN gitHead`
 and base/merge the `sdf` branch on exactly that commit before releasing.

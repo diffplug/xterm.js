@@ -1,6 +1,9 @@
 {
   "name": "@diffplug/xterm-addon-webgl-sdf",
-  "version": "0.20.0-sdf301.0",
+  "version": "0.20.0-sdf301.1",
+  "peerDependencies": {
+    "@xterm/xterm": "^6.1.0-beta.301"
+  },
   "author": {
     "name": "The xterm.js authors",
     "url": "https://xtermjs.org/"
