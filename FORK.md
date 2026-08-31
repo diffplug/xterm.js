@@ -110,6 +110,7 @@ and base/merge the `sdf` branch on exactly that commit before releasing.
 
 ```sh
 npm install
+rm -rf node_modules/@xterm/xterm                 # see below — must follow every install
 npm run package                                  # tsc all + esbuild .mjs bundles
 (cd addons/addon-webgl && npm run package)       # webpack UMD bundle
 (cd addons/addon-webgl && npm pack)              # produces the release tarball
@@ -118,6 +119,13 @@ gh release create sdf-vX.Y.Z-sdfNNN.M \
   --title "addon-webgl-sdf X.Y.Z-sdfNNN.M" \
   addons/addon-webgl/diffplug-xterm-addon-webgl-sdf-X.Y.Z-sdfNNN.M.tgz
 ```
+
+**Delete `node_modules/@xterm/xterm` after every `npm install`.** npm
+auto-installs the peer range we check into `addons/addon-webgl/package.json`,
+and that package ships its own `typings/xterm.d.ts` — a duplicate of this
+repo's, which upstream never has to deal with because it never commits the peer
+field. Leaving it turns `npm run package` into a wall of
+`TS2300: Duplicate identifier 'Terminal'`.
 
 Consumers depend on the release asset by URL (pnpm tarball dependency); the
 lockfile records an integrity hash. Treat published release assets as
