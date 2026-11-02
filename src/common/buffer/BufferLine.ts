@@ -449,6 +449,10 @@ export class BufferLine implements IBufferLine {
           delete this._extendedAttrs[key];
         }
       }
+      // handle fullwidth at line end: reset last cell if it is first cell of a wide char
+      if (cols && this.getWidth(cols - 1) === 2) {
+        this.setCellFromCodepoint(cols - 1, 0, 1, fillCellData);
+      }
     }
     this.length = cols;
     return uint32Cells * 4 * Constants.CLEANUP_THRESHOLD < this._data.buffer.byteLength;
@@ -579,13 +583,8 @@ export class BufferLine implements IBufferLine {
    */
   public translateToString(trimRight?: boolean, startCol?: number, endCol?: number, outColumns?: number[]): string {
     const isCanonical = (startCol === undefined || startCol === 0) && endCol === undefined && outColumns === undefined;
-    if (isCanonical && this._cacheValid) {
-      if (trimRight) {
-        return this._cacheTrimmed ? this._cache : this._cache.trimEnd();
-      }
-      if (!this._cacheTrimmed) {
-        return this._cache;
-      }
+    if (isCanonical && this._cacheValid && trimRight === this._cacheTrimmed) {
+      return this._cache;
     }
     startCol = startCol ?? 0;
     endCol = endCol ?? this.length;

@@ -62,7 +62,9 @@ in `docs/specs/webgl-text.md`.
   (alpha channel) at a fixed base size (default 32px, never derived from the
   terminal font) and tinted/reconstructed in the glyph shader. The atlas has
   no notion of color for SDF glyphs — one texture entry per shape, per-color
-  records share it — and each texel holds one plain distance field (no
+  records share it. Atlas clearing also checks the SDF cache before treating
+  an empty first page as an empty atlas; SDF warm-up can populate a later
+  active page after a clear. Each texel holds one plain distance field (no
   channel packing) so the layout stays compatible with a future MSDF switch.
   Decorated cells (underline/strike/overline), custom glyphs, powerline
   glyphs and probable emoji keep the raster path. Instance layout is 16
@@ -70,6 +72,9 @@ in `docs/specs/webgl-text.md`.
   GlyphRenderer vertex code.
 - `addons/addon-webgl/src/CharAtlasUtils.test.ts` — config fixture gains the
   `sdf`/`sdfGlyphSize` fields.
+- `addons/addon-webgl/test/{WebglAtlasWarmUp,WebglContextRelease}.test.ts` —
+  upstream lifecycle coverage also runs with SDF enabled. Warm-up observes
+  the SDF rasterizer canvas on that path.
 - `addons/addon-webgl/test/WebglSdfAtlasEviction.test.ts` — new file: drives
   the SDF path across an atlas page eviction. The invariant it guards is that
   no cached SDF record outlives the page it was drawn to.

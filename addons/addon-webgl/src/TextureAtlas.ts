@@ -60,6 +60,7 @@ let $glyph = undefined;
 
 export class TextureAtlas implements ITextureAtlas {
   private _didWarmUp: boolean = false;
+  private _warmUpQueue: InstanceType<typeof IdleTaskQueue> | undefined;
 
   private _cacheMap: FourKeyMap<number, number, number, number, IRasterizedGlyph> = new FourKeyMap();
   private _cacheMapCombined: FourKeyMap<string, number, number, number, IRasterizedGlyph> = new FourKeyMap();
@@ -123,6 +124,7 @@ export class TextureAtlas implements ITextureAtlas {
   }
 
   public dispose(): void {
+    this._warmUpQueue?.clear();
     this._tmpCanvas.remove();
     for (const page of this.pages) {
       page.canvas.remove();
@@ -140,7 +142,8 @@ export class TextureAtlas implements ITextureAtlas {
 
   private _doWarmUp(): void {
     // Pre-fill with ASCII 33-126, this is not urgent and done in idle callbacks
-    const queue = new IdleTaskQueue(this._logService);
+    this._warmUpQueue?.clear();
+    const queue = this._warmUpQueue = new IdleTaskQueue(this._logService);
     for (let i = 33; i < 126; i++) {
       queue.enqueue(() => {
         if (!this._cacheMap.get(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT)) {
@@ -155,7 +158,10 @@ export class TextureAtlas implements ITextureAtlas {
   public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
 
   public clearTexture(): void {
-    if (this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
+    // SDF warm-up can fill several pages; after a clear the next glyph may land
+    // on a later active page while the first page still looks empty. Its shape
+    // cache must be cleared too so warmUp can replace the pending queue.
+    if (this._sdfGlyphCache.size === 0 && this._pages[0].currentRow.x === 0 && this._pages[0].currentRow.y === 0) {
       return;
     }
     for (const page of this._pages) {
