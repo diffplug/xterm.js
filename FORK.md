@@ -75,6 +75,9 @@ in `docs/specs/webgl-text.md`.
 - `addons/addon-webgl/test/{WebglAtlasWarmUp,WebglContextRelease}.test.ts` —
   upstream lifecycle coverage also runs with SDF enabled. Warm-up observes
   the SDF rasterizer canvas on that path.
+- `addons/addon-webgl/test/WebglRescaleOverlappingGlyphs.test.ts` — runs with
+  SDF enabled too (faked glyph widths divided by `renderScale`), and reads
+  instance data at the fork's 16 floats/cell.
 - `addons/addon-webgl/test/WebglSdfAtlasEviction.test.ts` — new file: drives
   the SDF path across an atlas page eviction. The invariant it guards is that
   no cached SDF record outlives the page it was drawn to.
