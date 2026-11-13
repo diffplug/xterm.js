@@ -10,7 +10,7 @@ import { ITerminal } from 'browser/Types';
 import { Disposable, toDisposable } from 'common/Lifecycle';
 import { getSafariVersion, isSafari } from 'common/Platform';
 import { ICoreService, IDecorationService, ILogService, IOptionsService } from 'common/services/Services';
-import { IWebGL2RenderingContext } from './Types';
+import { IWebGL2RenderingContext, type IWebglSceneFrame } from './Types';
 import { WebglRenderer } from './WebglRenderer';
 import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
 import { Emitter, EventUtils } from 'common/Event';
@@ -27,6 +27,8 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
   public readonly onRemoveTextureAtlasCanvas = this._onRemoveTextureAtlasCanvas.event;
   private readonly _onContextLoss = this._register(new Emitter<void>());
   public readonly onContextLoss = this._onContextLoss.event;
+  private readonly _onSceneFrame = this._register(new Emitter<IWebglSceneFrame>());
+  public readonly onSceneFrame = this._onSceneFrame.event;
 
   private readonly _customGlyphs: boolean;
   private readonly _sdf: boolean;
@@ -92,6 +94,7 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
     this._register(EventUtils.forward(this._renderer.onChangeTextureAtlas, this._onChangeTextureAtlas));
     this._register(EventUtils.forward(this._renderer.onAddTextureAtlasCanvas, this._onAddTextureAtlasCanvas));
     this._register(EventUtils.forward(this._renderer.onRemoveTextureAtlasCanvas, this._onRemoveTextureAtlasCanvas));
+    this._register(EventUtils.forward(this._renderer.onSceneFrame, this._onSceneFrame));
     renderService.setRenderer(this._renderer);
 
     this._register(toDisposable(() => {
@@ -102,6 +105,10 @@ export class WebglAddon extends Disposable implements ITerminalAddon, IWebglApi 
       renderService.setRenderer((this._terminal as any)._core._createRenderer());
       renderService.handleResize(terminal.cols, terminal.rows);
     }));
+  }
+
+  public get sceneFrame(): IWebglSceneFrame | undefined {
+    return this._renderer?.sceneFrame;
   }
 
   public get textureAtlas(): HTMLCanvasElement | undefined {

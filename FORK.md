@@ -70,6 +70,16 @@ in `docs/specs/webgl-text.md`.
   glyphs and probable emoji keep the raster path. Instance layout is 16
   floats/cell (upstream 11) — merge carefully if upstream touches
   GlyphRenderer vertex code.
+- `addons/addon-webgl/src/{GlyphRenderer,RectangleRenderer,WebglRenderer,WebglAddon,Types}.ts`
+  and the typings — the scene frame: `onSceneFrame` / `sceneFrame` hand a
+  caller what each frame drew (glyph instances, background and cursor
+  rectangles, atlas pages) as plain data, so canopy draws the same terminal
+  in a WebXR scene under its own projection. Additive getters plus one event
+  fired at the end of `renderRows`; the glyph view is that frame's slice of
+  GlyphRenderer's double buffer, so keep it pointing at the buffer `render`
+  uploads if upstream touches that code.
+- `addons/addon-webgl/test/WebglSceneFrame.test.ts` — new file: the frame
+  carries the drawn glyphs at the cells and layout it states.
 - `addons/addon-webgl/src/CharAtlasUtils.test.ts` — config fixture gains the
   `sdf`/`sdfGlyphSize` fields.
 - `addons/addon-webgl/test/{WebglAtlasWarmUp,WebglContextRelease}.test.ts` —

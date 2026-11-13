@@ -150,3 +150,29 @@ export interface IBoundingBox {
   right: number;
   bottom: number;
 }
+
+/**
+ * Fork (scene frame): what one WebGL frame drew, as plain data, so a caller can draw the same
+ * terminal in its own WebGL context with its own projection (a WebXR scene). Every array is a
+ * view the next frame overwrites. Positions are in terminal space: (0, 0) top-left, (1, 1)
+ * bottom-right of the canvas, plus glyph offsets in device px over `resolution`.
+ */
+export interface IWebglSceneFrame {
+  /** The canvas size in device px, the glyph shader's `u_resolution`. */
+  readonly resolution: { readonly width: number, readonly height: number };
+  /** Glyph instances, `glyphStride` floats each, fields at the `glyphLayout` offsets. */
+  readonly glyphs: Float32Array;
+  readonly glyphStride: number;
+  readonly glyphLayout: {
+    readonly offset: number, readonly size: number, readonly texpage: number, readonly texcoord: number,
+    readonly texsize: number, readonly tint: number, readonly sdf: number, readonly cellpos: number
+  };
+  /** Background (selection included) and cursor rectangles: x, y, width, height, r, g, b, a. */
+  readonly backgrounds: Float32Array;
+  readonly cursor: Float32Array;
+  readonly rectStride: number;
+  /** Atlas pages by `texpage`; re-upload a page when its version changes. */
+  readonly pages: ReadonlyArray<{ readonly canvas: HTMLCanvasElement, readonly version: number }>;
+  /** SDF texels hold coverage edge at this alpha (`a_sdf` > 0.5 marks an SDF glyph). */
+  readonly sdfEdge: number;
+}

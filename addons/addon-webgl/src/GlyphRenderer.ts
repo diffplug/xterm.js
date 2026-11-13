@@ -131,6 +131,7 @@ export class GlyphRenderer extends Disposable {
   private _lastSeenPageLayoutVersion: number = -1;
   private _pageOverflowWarned: boolean = false;
   private _activeBuffer: number = 0;
+  private _sceneGlyphs: Float32Array = new Float32Array(0);
   private readonly _vertices: IVertices = {
     count: 0,
     attributes: new Float32Array(0),
@@ -414,7 +415,8 @@ export class GlyphRenderer extends Disposable {
 
     // Bind the attributes buffer
     gl.bindBuffer(gl.ARRAY_BUFFER, this._attributesBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, activeBuffer.subarray(0, bufferLength), gl.STREAM_DRAW);
+    this._sceneGlyphs = activeBuffer.subarray(0, bufferLength);
+    gl.bufferData(gl.ARRAY_BUFFER, this._sceneGlyphs, gl.STREAM_DRAW);
 
     // Bind the atlas page texture if they have changed. AtlasPage.version is globally
     // monotonic, so a page object swap at the same index (which happens after a page merge)
@@ -433,6 +435,14 @@ export class GlyphRenderer extends Disposable {
 
     // Draw the viewport
     gl.drawElementsInstanced(gl.TRIANGLE_STRIP, 4, gl.UNSIGNED_BYTE, 0, bufferLength / Constants.INDICES_PER_CELL);
+  }
+
+  /**
+   * Fork (scene frame): the instances the last `render` drew, `INDICES_PER_CELL` floats each. A
+   * view into a double buffer, so it is valid only until the next frame.
+   */
+  public get sceneGlyphs(): Float32Array {
+    return this._sceneGlyphs;
   }
 
   public setAtlas(atlas: ITextureAtlas): void {

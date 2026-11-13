@@ -147,6 +147,16 @@ export class RectangleRenderer extends Disposable {
     }));
   }
 
+  /** Fork (scene frame): the background rectangles, `INDICES_PER_RECTANGLE` floats each. */
+  public get sceneBackgrounds(): Float32Array {
+    return this._vertices.attributes.subarray(0, this._vertices.count * INDICES_PER_RECTANGLE);
+  }
+
+  /** Fork (scene frame): the cursor rectangles, `INDICES_PER_RECTANGLE` floats each. */
+  public get sceneCursor(): Float32Array {
+    return this._verticesCursor.attributes.subarray(0, this._verticesCursor.count * INDICES_PER_RECTANGLE);
+  }
+
   public renderBackgrounds(): void {
     this._renderVertices(this._vertices);
   }

@@ -6,7 +6,7 @@
 import { ITerminal } from 'browser/Types';
 import { CellColorResolver } from './CellColorResolver';
 import { acquireTextureAtlas, removeTerminalFromCache } from './CharAtlasCache';
-import { DEFAULT_SDF_GLYPH_SIZE } from './SdfGlyphRasterizer';
+import { DEFAULT_SDF_GLYPH_SIZE, SDF_CUTOFF } from './SdfGlyphRasterizer';
 import { CursorBlinkStateManager } from './CursorBlinkStateManager';
 import { observeDevicePixelDimensions } from './DevicePixelObserver';
 import { IRenderDimensions, IRenderer, IRequestRedrawEvent } from 'browser/renderer/shared/Types';
@@ -21,13 +21,17 @@ import { Terminal } from '@xterm/xterm';
 import { GlyphRenderer } from './GlyphRenderer';
 import { RectangleRenderer } from './RectangleRenderer';
 import { COMBINED_CHAR_BIT_MASK, RenderModel, RenderModelConstants } from './RenderModel';
-import { IWebGL2RenderingContext, type ITextureAtlas } from './Types';
+import { IWebGL2RenderingContext, type ITextureAtlas, type IWebglSceneFrame } from './Types';
 import { LinkRenderLayer } from './renderLayer/LinkRenderLayer';
 import { IRenderLayer } from './renderLayer/Types';
 import { Emitter, EventUtils } from 'common/Event';
 import { addDisposableListener } from 'browser/Dom';
 import { combinedDisposable, Disposable, MutableDisposable, toDisposable } from 'common/Lifecycle';
 import { createRenderDimensions } from 'browser/renderer/shared/RendererUtils';
+
+/** Fork (scene frame): field offsets in a glyph instance; GlyphRenderer's attribute pointers. */
+const SCENE_GLYPH_LAYOUT = { offset: 0, size: 2, texpage: 4, texcoord: 5, texsize: 7, tint: 9, sdf: 13, cellpos: 14 } as const;
+const EMPTY_FLOATS = new Float32Array(0);
 
 const enum Constants {
   MERGE_RETRY_LIMIT = 32
@@ -70,6 +74,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
   public readonly onRequestRedraw = this._onRequestRedraw.event;
   private readonly _onContextLoss = this._register(new Emitter<void>());
   public readonly onContextLoss = this._onContextLoss.event;
+  private readonly _onSceneFrame = this._register(new Emitter<IWebglSceneFrame>());
+  /** Fork (scene frame): fires after every frame this renderer draws. */
+  public readonly onSceneFrame = this._onSceneFrame.event;
+  private _sceneFrame: IWebglSceneFrame | undefined;
 
   constructor(
     private _terminal: Terminal,
@@ -410,9 +418,34 @@ export class WebglRenderer extends Disposable implements IRenderer {
     // Render
     this._rectangleRenderer.value.renderBackgrounds();
     this._glyphRenderer.value.render(this._model);
-    if (!this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible) {
+    const cursorVisible = !this._cursorBlinkStateManager.value || this._cursorBlinkStateManager.value.isCursorVisible;
+    if (cursorVisible) {
       this._rectangleRenderer.value.renderCursor();
     }
+    this._emitSceneFrame(cursorVisible);
+  }
+
+  /** Fork (scene frame): the last frame drawn, or undefined before the first. */
+  public get sceneFrame(): IWebglSceneFrame | undefined {
+    return this._sceneFrame;
+  }
+
+  private _emitSceneFrame(cursorVisible: boolean): void {
+    if (!this._glyphRenderer.value || !this._rectangleRenderer.value || !this._charAtlas) {
+      return;
+    }
+    this._sceneFrame = {
+      resolution: { width: this.dimensions.device.canvas.width, height: this.dimensions.device.canvas.height },
+      glyphs: this._glyphRenderer.value.sceneGlyphs,
+      glyphStride: 16,
+      glyphLayout: SCENE_GLYPH_LAYOUT,
+      backgrounds: this._rectangleRenderer.value.sceneBackgrounds,
+      cursor: cursorVisible ? this._rectangleRenderer.value.sceneCursor : EMPTY_FLOATS,
+      rectStride: 8,
+      pages: this._charAtlas.pages,
+      sdfEdge: 1 - SDF_CUTOFF
+    };
+    this._onSceneFrame.fire(this._sceneFrame);
   }
 
   private _updateCursorBlink(): void {

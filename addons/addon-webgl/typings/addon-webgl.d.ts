@@ -35,6 +35,19 @@ declare module '@diffplug/xterm-addon-webgl-sdf' {
      */
     public readonly onRemoveTextureAtlasCanvas: IEvent<HTMLCanvasElement>;
 
+    /**
+     * Fork: fires after every frame the renderer draws, with that frame as plain data, so a
+     * caller can draw the same terminal into its own WebGL context with its own projection (a
+     * WebXR scene) — glyph quads and SDF edges stay crisp at any scale or tilt there, where a
+     * texture of the canvas is resampled. The frame's arrays are overwritten by the next frame.
+     */
+    public readonly onSceneFrame: IEvent<IWebglSceneFrame>;
+
+    /**
+     * Fork: the last frame drawn (see `onSceneFrame`), or undefined before the first.
+     */
+    public readonly sceneFrame: IWebglSceneFrame | undefined;
+
     constructor(options?: IWebglAddonOptions);
 
     /**
@@ -52,6 +65,47 @@ declare module '@diffplug/xterm-addon-webgl-sdf' {
      * Clears the terminal's texture atlas and triggers a redraw.
      */
     public clearTextureAtlas(): void;
+  }
+
+  /**
+   * Fork: one frame the renderer drew. Positions are in terminal space: (0, 0) is the canvas's
+   * top-left and (1, 1) its bottom-right; a glyph also carries an offset in device px, divided by
+   * `resolution`. A glyph quad covers `cellpos + offset / resolution` to that plus `size`, and
+   * samples atlas page `texpage` from `texcoord` to `texcoord + texsize`.
+   */
+  export interface IWebglSceneFrame {
+    /** The canvas size in device px. */
+    readonly resolution: { readonly width: number, readonly height: number };
+    /** Glyph instances, `glyphStride` floats each, with fields at the `glyphLayout` offsets. */
+    readonly glyphs: Float32Array;
+    readonly glyphStride: number;
+    readonly glyphLayout: {
+      /** vec2, device px. */
+      readonly offset: number;
+      /** vec2, terminal space. */
+      readonly size: number;
+      /** float, index into `pages`. */
+      readonly texpage: number;
+      /** vec2, atlas uv. */
+      readonly texcoord: number;
+      /** vec2, atlas uv. */
+      readonly texsize: number;
+      /** vec4, the SDF glyph's color; unused for a raster glyph, whose texel is its color. */
+      readonly tint: number;
+      /** float, > 0.5 for an SDF glyph. */
+      readonly sdf: number;
+      /** vec2, terminal space. */
+      readonly cellpos: number;
+    };
+    /** Background rectangles (selection included), `rectStride` floats each: x, y, width, height, r, g, b, a. */
+    readonly backgrounds: Float32Array;
+    /** Cursor rectangles in the same layout; empty while a blinking cursor is hidden. */
+    readonly cursor: Float32Array;
+    readonly rectStride: number;
+    /** Atlas pages by `texpage`; re-upload a page when its `version` changes. */
+    readonly pages: ReadonlyArray<{ readonly canvas: HTMLCanvasElement, readonly version: number }>;
+    /** An SDF texel's alpha at the glyph edge: coverage is a smoothstep around it. */
+    readonly sdfEdge: number;
   }
 
   export interface IWebglAddonOptions {
